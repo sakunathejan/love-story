@@ -1,13 +1,85 @@
 import { createClient } from '@supabase/supabase-js'
 
-// Replace these with your actual Supabase credentials
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'YOUR_SUPABASE_URL'
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'YOUR_SUPABASE_ANON_KEY'
+// Get Supabase credentials from environment variables
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 console.log('Supabase: Initializing with URL:', supabaseUrl)
 console.log('Supabase: Initializing with key:', supabaseAnonKey ? '***' + supabaseAnonKey.slice(-4) : 'undefined')
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// Check if environment variables are properly set
+let supabase
+
+if (!supabaseUrl || !supabaseAnonKey || 
+    supabaseUrl === 'YOUR_SUPABASE_URL' || 
+    supabaseAnonKey === 'YOUR_SUPABASE_ANON_KEY') {
+  console.error('Supabase: Environment variables not properly configured!')
+  console.error('Supabase: Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your environment')
+  
+  // Create a mock client that will show appropriate error messages
+  supabase = {
+    storage: {
+      from: () => ({
+        upload: async () => {
+          throw new Error('Supabase not configured. Please set environment variables.')
+        },
+        remove: async () => {
+          throw new Error('Supabase not configured. Please set environment variables.')
+        },
+        getPublicUrl: () => ({
+          data: { publicUrl: null }
+        }),
+        listBuckets: async () => ({
+          data: [],
+          error: new Error('Supabase not configured. Please set environment variables.')
+        }),
+        createBucket: async () => ({
+          data: null,
+          error: new Error('Supabase not configured. Please set environment variables.')
+        })
+      }),
+      listBuckets: async () => ({
+        data: [],
+        error: new Error('Supabase not configured. Please set environment variables.')
+      }),
+      createBucket: async () => ({
+        data: null,
+        error: new Error('Supabase not configured. Please set environment variables.')
+      })
+    },
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          single: async () => ({
+            data: null,
+            error: new Error('Supabase not configured. Please set environment variables.')
+          }),
+          then: async () => ({
+            data: [],
+            error: new Error('Supabase not configured. Please set environment variables.')
+          })
+        }),
+        insert: async () => ({
+          data: null,
+          error: new Error('Supabase not configured. Please set environment variables.')
+        }),
+        update: async () => ({
+          data: null,
+          error: new Error('Supabase not configured. Please set environment variables.')
+        }),
+        delete: async () => ({
+          data: null,
+          error: new Error('Supabase not configured. Please set environment variables.')
+        })
+      })
+    })
+  }
+} else {
+  // Create the real Supabase client
+  supabase = createClient(supabaseUrl, supabaseAnonKey)
+}
+
+export { supabase }
 
 // Storage bucket name for images
 const STORAGE_BUCKET = 'love-story-images'

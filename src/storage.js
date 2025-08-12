@@ -1,8 +1,25 @@
 import { supabase, uploadFile, deleteFile, getPublicUrl, initializeStorage } from './supabase'
 import { nanoid } from 'nanoid'
 
+// Check if Supabase is properly configured
+function checkSupabaseConfig() {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+  
+  if (!supabaseUrl || !supabaseAnonKey || 
+      supabaseUrl === 'YOUR_SUPABASE_URL' || 
+      supabaseAnonKey === 'YOUR_SUPABASE_ANON_KEY') {
+    throw new Error('Supabase not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY environment variables.')
+  }
+}
+
 // Initialize Supabase storage on first load
-initializeStorage()
+try {
+  checkSupabaseConfig()
+  initializeStorage()
+} catch (error) {
+  console.error('Storage initialization failed:', error.message)
+}
 
 // For guestbook messages and settings (still using localStorage for now)
 const messageStore = {
@@ -43,6 +60,9 @@ const settingsStore = {
 
 export async function getMediaIndex() {
   try {
+    // Check Supabase configuration first
+    checkSupabaseConfig()
+    
     // Get all media IDs from Supabase
     const { data, error } = await supabase
       .from('media')
