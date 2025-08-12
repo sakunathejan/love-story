@@ -12,7 +12,7 @@ import Messages from './components/Messages'
 import Settings from './components/Settings'
 import ExportBackup from './components/ExportBackup'
 import Events from './components/Events'
-import { ensureDemoContent } from './storage'
+// Demo content generation removed - now only shows real uploaded content
 
 function App() {
   const [theme, setTheme] = useLocalStorage('theme', 'light')
@@ -20,7 +20,7 @@ function App() {
 
   useEffect(() => {
     document.title = 'Saku & Divya — Our Love Story'
-    ensureDemoContent()
+    // Demo content generation removed - now only shows real uploaded content
   }, [])
 
   return (
@@ -37,7 +37,7 @@ function App() {
         {tab === 'backup' && <ExportBackup />}
       </main>
       <footer className="border-t border-gray-200 dark:border-gray-800 py-4 text-center text-xs text-gray-500">
-        Built with love • All data stays in your browser
+        Built with love • Media stored in the cloud
       </footer>
     </div>
   )

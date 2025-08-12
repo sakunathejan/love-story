@@ -50,9 +50,10 @@ export default function Lightbox({ items, index, onClose, setIndex }) {
         }
         
         if (!cancelled) {
-          const objectUrl = URL.createObjectURL(blob)
-          console.log('Lightbox: Created object URL for ID:', current.id, objectUrl)
-          setUrl(objectUrl)
+          // For Supabase, blob.url contains the direct public URL
+          // No need to create object URL
+          console.log('Lightbox: Using direct URL for ID:', current.id, blob.url)
+          setUrl(blob.url)
           setLoading(false)
         }
       } catch (err) {
@@ -64,10 +65,7 @@ export default function Lightbox({ items, index, onClose, setIndex }) {
     
     return () => { 
       cancelled = true
-      if (url) { 
-        console.log('Lightbox: Revoking URL for ID:', current.id)
-        URL.revokeObjectURL(url) 
-      }
+      // No need to revoke URL since we're not creating object URLs anymore
     }
   }, [current.id, current.filename, current.type])
 

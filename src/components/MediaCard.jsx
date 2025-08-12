@@ -25,45 +25,46 @@ export default function MediaCard({ meta, onToggleFavorite, onOpen, onDelete, on
   }, [meta])
 
   useEffect(() => {
-    let revoked = false
     setLoading(true)
     setError(false)
     
     console.log('MediaCard: Loading media for', meta.id, meta.filename, meta.type)
     
-    ;(async () => {
-      try {
-        const blob = await getMediaBlob(meta.id)
-        console.log('MediaCard: Got blob for', meta.id, blob ? 'success' : 'null')
-        
-        if (!blob) {
-          console.error('MediaCard: No blob returned for', meta.id)
+    // For Supabase, we can use the URL directly from metadata
+    if (meta.url) {
+      console.log('MediaCard: Using direct URL for', meta.id, meta.url)
+      setUrl(meta.url)
+      setLoading(false)
+    } else {
+      // Fallback to getMediaBlob for compatibility
+      ;(async () => {
+        try {
+          const blob = await getMediaBlob(meta.id)
+          console.log('MediaCard: Got blob for', meta.id, blob ? 'success' : 'null')
+          
+          if (!blob) {
+            console.error('MediaCard: No blob returned for', meta.id)
+            setError(true)
+            setLoading(false)
+            return
+          }
+          
+          if (blob.url) {
+            // Supabase returns URL in blob object
+            setUrl(blob.url)
+            setLoading(false)
+          } else {
+            setError(true)
+            setLoading(false)
+          }
+        } catch (err) {
+          console.error('MediaCard: Error loading media for', meta.id, err)
           setError(true)
           setLoading(false)
-          return
         }
-        
-        if (!revoked) {
-          const objectUrl = URL.createObjectURL(blob)
-          console.log('MediaCard: Created object URL for', meta.id, objectUrl)
-          setUrl(objectUrl)
-          setLoading(false)
-        }
-      } catch (err) {
-        console.error('MediaCard: Error loading media for', meta.id, err)
-        setError(true)
-        setLoading(false)
-      }
-    })()
-    
-    return () => { 
-      revoked = true
-      if (url) { 
-        console.log('MediaCard: Revoking URL for', meta.id)
-        URL.revokeObjectURL(url) 
-      }
+      })()
     }
-  }, [meta.id, meta.filename, meta.type])
+  }, [meta.id, meta.filename, meta.type, meta.url])
 
   // Initialize edit form when modal opens
   useEffect(() => {

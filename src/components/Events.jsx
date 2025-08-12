@@ -99,7 +99,7 @@ export default function Events() {
             </span>
           </div>
           
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 md:gap-6">
             {group.items.map((m) => (
               <div key={m.id} className="group cursor-pointer" onClick={() => handleOpenMedia(m)}>
                 <div className="aspect-square rounded-lg overflow-hidden border border-gray-200 dark:border-gray-800 bg-gray-100 dark:bg-gray-900 hover:border-brand-300 dark:hover:border-brand-600 transition-colors">

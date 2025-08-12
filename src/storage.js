@@ -1,22 +1,60 @@
-import localforage from 'localforage'
+import { supabase, uploadFile, deleteFile, getPublicUrl, initializeStorage } from './supabase'
 import { nanoid } from 'nanoid'
 
-localforage.config({
-  name: 'love-story',
-  storeName: 'love_story_db',
-})
+// Initialize Supabase storage on first load
+initializeStorage()
 
-export const mediaStore = localforage.createInstance({ name: 'love-story', storeName: 'media' })
-export const metaStore = localforage.createInstance({ name: 'love-story', storeName: 'meta' })
-export const messageStore = localforage.createInstance({ name: 'love-story', storeName: 'messages' })
-export const settingsStore = localforage.createInstance({ name: 'love-story', storeName: 'settings' })
+// For guestbook messages and settings (still using localStorage for now)
+const messageStore = {
+  getItem: (key) => {
+    try {
+      const item = localStorage.getItem(key)
+      return item ? JSON.parse(item) : null
+    } catch {
+      return null
+    }
+  },
+  setItem: (key, value) => {
+    try {
+      localStorage.setItem(key, JSON.stringify(value))
+    } catch (error) {
+      console.error('Error saving to localStorage:', error)
+    }
+  }
+}
 
-const INDEX_KEY = 'media:index'
+const settingsStore = {
+  getItem: (key) => {
+    try {
+      const item = localStorage.getItem(key)
+      return item ? JSON.parse(item) : null
+    } catch {
+      return null
+    }
+  },
+  setItem: (key, value) => {
+    try {
+      localStorage.setItem(key, JSON.stringify(value))
+    } catch (error) {
+      console.error('Error saving to localStorage:', error)
+    }
+  }
+}
 
 export async function getMediaIndex() {
   try {
-    const idx = await metaStore.getItem(INDEX_KEY)
-    const result = Array.isArray(idx) ? idx : []
+    // Get all media IDs from Supabase
+    const { data, error } = await supabase
+      .from('media')
+      .select('id')
+      .order('created_at', { ascending: false })
+    
+    if (error) {
+      console.error('getMediaIndex: Error retrieving index:', error)
+      return []
+    }
+    
+    const result = data.map(item => item.id)
     console.log('getMediaIndex: Retrieved index:', result.length, 'items')
     return result
   } catch (error) {
@@ -28,7 +66,8 @@ export async function getMediaIndex() {
 export async function setMediaIndex(ids) {
   try {
     console.log('setMediaIndex: Setting index with', ids.length, 'items')
-    await metaStore.setItem(INDEX_KEY, ids)
+    // Note: With Supabase, we don't need to manually manage an index
+    // The database handles this automatically
     console.log('setMediaIndex: Index updated successfully')
   } catch (error) {
     console.error('setMediaIndex: Error setting index:', error)
@@ -40,39 +79,86 @@ export async function addMediaFiles(files, defaultTags = []) {
   try {
     console.log('addMediaFiles: Adding', files.length, 'files with tags:', defaultTags)
     const added = []
-    let index = await getMediaIndex()
-    console.log('addMediaFiles: Current index length:', index.length)
     
     for (const file of files) {
-      const id = nanoid()
-      const isVideo = file.type.startsWith('video')
-      const meta = {
-        id,
-        filename: file.name,
-        size: file.size,
-        type: isVideo ? 'video' : 'image',
-        mime: file.type,
-        createdAt: Date.now(),
-        favorite: false,
-        tags: [...defaultTags],
-        eventId: null,
-        comments: [],
+      try {
+        const id = nanoid()
+        const isVideo = file.type.startsWith('video')
+        const fileName = `${id}-${file.name}`
+        
+        console.log('addMediaFiles: Adding file:', id, fileName, isVideo ? 'video' : 'image', file.size)
+        
+        // Upload file to Supabase storage
+        console.log('addMediaFiles: Starting file upload...')
+        const { publicUrl } = await uploadFile(file, fileName)
+        console.log('addMediaFiles: File upload completed, publicUrl:', publicUrl)
+        
+        // Create metadata record in database
+        console.log('addMediaFiles: Creating database record...')
+        const { data: meta, error } = await supabase
+          .from('media')
+          .insert({
+            id,
+            filename: file.name,
+            file_path: fileName,
+            file_size: file.size,
+            mime_type: file.type,
+            media_type: isVideo ? 'video' : 'image',
+            tags: defaultTags,
+            created_at: new Date().toISOString()
+          })
+          .select()
+          .single()
+        
+        if (error) {
+          console.error('addMediaFiles: Error inserting metadata:', error)
+          console.error('addMediaFiles: Error details:', error.message, error.details, error.hint)
+          console.error('addMediaFiles: Attempted to insert:', {
+            id,
+            filename: file.name,
+            file_path: fileName,
+            file_size: file.size,
+            mime_type: file.type,
+            media_type: isVideo ? 'video' : 'image',
+            tags: defaultTags,
+            created_at: new Date().toISOString()
+          })
+          // Clean up uploaded file if metadata insertion fails
+          console.log('addMediaFiles: Cleaning up uploaded file due to database error...')
+          await deleteFile(fileName)
+          continue
+        }
+        
+        console.log('addMediaFiles: Database record created successfully:', meta)
+        
+        // Transform to match expected format
+        const transformedMeta = {
+          id: meta.id,
+          filename: meta.filename,
+          size: meta.file_size,
+          type: meta.media_type,
+          mime: meta.mime_type,
+          createdAt: new Date(meta.created_at).getTime(),
+          favorite: meta.is_favorite,
+          tags: meta.tags || [],
+          eventId: meta.event_id,
+          comments: [],
+          file_path: meta.file_path, // Include file_path for getMediaBlob
+          url: publicUrl
+        }
+        
+        added.push(transformedMeta)
+        console.log('addMediaFiles: Successfully added file:', id)
+        
+      } catch (fileError) {
+        console.error('addMediaFiles: Error processing file:', file.name, fileError)
+        console.error('addMediaFiles: File error details:', fileError.message, fileError.details, fileError.hint)
+        // Continue with next file instead of failing completely
+        continue
       }
-      
-      console.log('addMediaFiles: Adding file:', id, meta.filename, meta.type, meta.size)
-      
-      await mediaStore.setItem(`blob:${id}`, file)
-      await metaStore.setItem(`meta:${id}`, meta)
-      index.unshift(id)
-      added.push(meta)
-      
-      console.log('addMediaFiles: Successfully added file:', id)
     }
     
-    await setMediaIndex(index)
-    console.log('addMediaFiles: Updated index, new length:', index.length)
     console.log('addMediaFiles: Returning', added.length, 'added files')
-    
     return added
   } catch (error) {
     console.error('addMediaFiles: Error adding files:', error)
@@ -81,25 +167,79 @@ export async function addMediaFiles(files, defaultTags = []) {
 }
 
 export async function getMediaMeta(id) {
-  return metaStore.getItem(`meta:${id}`)
+  try {
+    const { data, error } = await supabase
+      .from('media')
+      .select('*')
+      .eq('id', id)
+      .single()
+    
+    if (error || !data) {
+      return null
+    }
+    
+    // Transform to match expected format
+    return {
+      id: data.id,
+      filename: data.filename,
+      size: data.file_size,
+      type: data.media_type,
+      mime: data.mime_type,
+      createdAt: new Date(data.created_at).getTime(),
+      favorite: data.is_favorite,
+      tags: data.tags || [],
+      eventId: data.event_id,
+      comments: [],
+      file_path: data.file_path, // Include file_path for getMediaBlob
+      url: getPublicUrl(data.file_path)
+    }
+  } catch (error) {
+    console.error('getMediaMeta: Error fetching metadata:', error)
+    return null
+  }
 }
 
 export async function getAllMediaMeta() {
   try {
     console.log('getAllMediaMeta: Fetching all media metadata')
-    const index = await getMediaIndex()
-    console.log('getAllMediaMeta: Index length:', index.length)
+    console.log('getAllMediaMeta: Supabase client:', supabase)
+    console.log('getAllMediaMeta: Supabase URL:', supabase.supabaseUrl)
     
-    const metas = []
-    for (const id of index) {
-      const m = await getMediaMeta(id)
-      if (m) metas.push(m)
+    const { data, error } = await supabase
+      .from('media')
+      .select('*')
+      .order('created_at', { ascending: false })
+    
+    console.log('getAllMediaMeta: Supabase response:', { data, error })
+    
+    if (error) {
+      console.error('getAllMediaMeta: Error fetching metadata:', error)
+      console.error('getAllMediaMeta: Error details:', error.message, error.details, error.hint)
+      return []
     }
     
+    // Transform to match expected format
+    const metas = data.map(meta => ({
+      id: meta.id,
+      filename: meta.filename,
+      size: meta.file_size,
+      type: meta.media_type,
+      mime: meta.mime_type,
+      createdAt: new Date(meta.created_at).getTime(),
+      favorite: meta.is_favorite,
+      tags: meta.tags || [],
+      eventId: meta.event_id,
+      comments: [],
+      file_path: meta.file_path, // Include file_path for getMediaBlob
+      url: getPublicUrl(meta.file_path)
+    }))
+    
     console.log('getAllMediaMeta: Returning', metas.length, 'metadata items')
+    console.log('getAllMediaMeta: Transformed data:', metas)
     return metas
   } catch (error) {
     console.error('getAllMediaMeta: Error fetching metadata:', error)
+    console.error('getAllMediaMeta: Error details:', error.message, error.stack)
     return []
   }
 }
@@ -107,9 +247,29 @@ export async function getAllMediaMeta() {
 export async function getMediaBlob(id) {
   try {
     console.log('getMediaBlob: Fetching blob for ID:', id)
-    const blob = await mediaStore.getItem(`blob:${id}`)
-    console.log('getMediaBlob: Result for ID:', id, blob ? `blob size: ${blob.size}` : 'null')
-    return blob
+    
+    // Get metadata to find file path
+    const meta = await getMediaMeta(id)
+    if (!meta) {
+      console.log('getMediaBlob: No metadata found for ID:', id)
+      return null
+    }
+    
+    console.log('getMediaBlob: Meta for ID:', id, meta)
+    console.log('getMediaBlob: file_path:', meta.file_path)
+    
+    // For Supabase, we return the public URL instead of blob
+    // The MediaCard component will use this URL directly
+    const url = getPublicUrl(meta.file_path)
+    console.log('getMediaBlob: Generated URL for ID:', id, url)
+    
+    if (!url) {
+      console.error('getMediaBlob: Failed to generate URL for ID:', id)
+      return null
+    }
+    
+    // Create a fake blob object with the URL for compatibility
+    return { url, size: meta.size }
   } catch (error) {
     console.error('getMediaBlob: Error fetching blob for ID:', id, error)
     return null
@@ -117,27 +277,102 @@ export async function getMediaBlob(id) {
 }
 
 export async function toggleFavorite(id) {
-  const meta = await getMediaMeta(id)
-  if (!meta) return null
-  meta.favorite = !meta.favorite
-  await metaStore.setItem(`meta:${id}`, meta)
-  return meta
+  try {
+    // Get current metadata
+    const meta = await getMediaMeta(id)
+    if (!meta) return null
+    
+    const newFavoriteState = !meta.favorite
+    
+    // Update in database
+    const { data, error } = await supabase
+      .from('media')
+      .update({ is_favorite: newFavoriteState })
+      .eq('id', id)
+      .select()
+      .single()
+    
+    if (error) {
+      console.error('toggleFavorite: Error updating favorite:', error)
+      return null
+    }
+    
+    // Return updated metadata
+    return {
+      ...meta,
+      favorite: newFavoriteState
+    }
+  } catch (error) {
+    console.error('toggleFavorite: Error:', error)
+    return null
+  }
 }
 
 export async function updateMeta(id, updater) {
-  const meta = await getMediaMeta(id)
-  if (!meta) return null
-  const next = typeof updater === 'function' ? updater(meta) : { ...meta, ...updater }
-  await metaStore.setItem(`meta:${id}`, next)
-  return next
+  try {
+    const meta = await getMediaMeta(id)
+    if (!meta) return null
+    
+    const next = typeof updater === 'function' ? updater(meta) : { ...meta, ...updater }
+    
+    // Map the fields to database columns
+    const updateData = {}
+    if (next.filename !== undefined) updateData.filename = next.filename
+    if (next.createdAt !== undefined) updateData.created_at = new Date(next.createdAt).toISOString()
+    if (next.favorite !== undefined) updateData.is_favorite = next.favorite
+    if (next.tags !== undefined) updateData.tags = next.tags
+    
+    // Update in database
+    const { data, error } = await supabase
+      .from('media')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single()
+    
+    if (error) {
+      console.error('updateMeta: Error updating metadata:', error)
+      return null
+    }
+    
+    // Return updated metadata
+    return {
+      ...meta,
+      ...next
+    }
+  } catch (error) {
+    console.error('updateMeta: Error:', error)
+    return null
+  }
 }
 
 export async function deleteMedia(id) {
-  let index = await getMediaIndex()
-  index = index.filter((x) => x !== id)
-  await setMediaIndex(index)
-  await metaStore.removeItem(`meta:${id}`)
-  await mediaStore.removeItem(`blob:${id}`)
+  try {
+    // Get metadata to find file path
+    const meta = await getMediaMeta(id)
+    if (!meta) return false
+    
+    // Delete from database first
+    const { error: dbError } = await supabase
+      .from('media')
+      .delete()
+      .eq('id', id)
+    
+    if (dbError) {
+      console.error('deleteMedia: Error deleting from database:', dbError)
+      return false
+    }
+    
+    // Delete file from storage
+    const fileName = `${id}-${meta.filename}`
+    await deleteFile(fileName)
+    
+    console.log('deleteMedia: Successfully deleted media:', id)
+    return true
+  } catch (error) {
+    console.error('deleteMedia: Error:', error)
+    return false
+  }
 }
 
 export async function addComment(id, text, author = 'Guest') {
@@ -267,195 +502,5 @@ export async function setSettings(next) {
   return next
 }
 
-// Test function to verify localforage is working
-export async function testStorage() {
-  try {
-    console.log('testStorage: Testing localforage functionality...')
-    
-    // Test basic storage
-    const testKey = 'test:key'
-    const testValue = { test: 'data', timestamp: Date.now() }
-    
-    await metaStore.setItem(testKey, testValue)
-    console.log('testStorage: Successfully wrote test data')
-    
-    const retrieved = await metaStore.getItem(testKey)
-    console.log('testStorage: Successfully retrieved test data:', retrieved)
-    
-    // Clean up test data
-    await metaStore.removeItem(testKey)
-    console.log('testStorage: Successfully cleaned up test data')
-    
-    return true
-  } catch (error) {
-    console.error('testStorage: Error testing storage:', error)
-    return false
-  }
-}
-
-export async function ensureDemoContent() {
-  try {
-    console.log('ensureDemoContent: Starting demo content creation...')
-    
-    const index = await getMediaIndex()
-    console.log('ensureDemoContent: Current index length:', index.length)
-    
-    if (index.length > 0) {
-      console.log('ensureDemoContent: Demo content already exists, skipping')
-      return []
-    }
-    
-    console.log('ensureDemoContent: Creating demo content...')
-    
-    // Try canvas approach first
-    let demoFiles = []
-    
-    try {
-      // Create simple demo files using canvas
-      const canvas = document.createElement('canvas')
-      canvas.width = 400
-      canvas.height = 300
-      const ctx = canvas.getContext('2d')
-      
-      // Create 3 demo images with different colors
-      const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1']
-      const texts = ['Love Story', 'Memories', 'Together']
-      
-      // Create all demo files synchronously using Promise.all
-      const demoPromises = []
-      
-      for (let i = 0; i < 3; i++) {
-        const promise = new Promise((resolve) => {
-          try {
-            // Clear canvas for each image
-            ctx.clearRect(0, 0, 400, 300)
-            
-            // Fill background
-            ctx.fillStyle = colors[i]
-            ctx.fillRect(0, 0, 400, 300)
-            
-            // Add text
-            ctx.fillStyle = 'white'
-            ctx.font = 'bold 24px Arial'
-            ctx.textAlign = 'center'
-            ctx.fillText(texts[i], 200, 150)
-            
-            // Add some decorative elements
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.3)'
-            ctx.beginPath()
-            ctx.arc(100 + i * 50, 100 + i * 30, 20, 0, 2 * Math.PI)
-            ctx.fill()
-            
-            // Convert canvas to blob
-            canvas.toBlob((blob) => {
-              if (blob) {
-                const file = new File([blob], `demo-${i + 1}.png`, { type: 'image/png' })
-                console.log(`ensureDemoContent: Created demo file ${i + 1}:`, file.name, file.size)
-                resolve(file)
-              } else {
-                console.error(`ensureDemoContent: Failed to create blob for demo ${i + 1}`)
-                resolve(null)
-              }
-            }, 'image/png')
-          } catch (error) {
-            console.error(`ensureDemoContent: Error creating demo ${i + 1}:`, error)
-            resolve(null)
-          }
-        })
-        
-        demoPromises.push(promise)
-      }
-      
-      // Wait for all demo files to be created
-      console.log('ensureDemoContent: Waiting for all demo files to be created...')
-      const createdFiles = await Promise.all(demoPromises)
-      demoFiles = createdFiles.filter(file => file !== null)
-      
-      console.log('ensureDemoContent: Canvas approach created', demoFiles.length, 'files')
-      
-    } catch (canvasError) {
-      console.error('ensureDemoContent: Canvas approach failed:', canvasError)
-      demoFiles = []
-    }
-    
-    // If canvas approach failed, create simple text-based demo content
-    if (demoFiles.length === 0) {
-      console.log('ensureDemoContent: Canvas failed, creating text-based demo content...')
-      
-      try {
-        // Create simple text-based demo items
-        const demoItems = [
-          { id: 'demo-1', filename: 'demo-1.txt', type: 'text', content: 'Love Story - Our beginning' },
-          { id: 'demo-2', filename: 'demo-2.txt', type: 'text', content: 'Memories - Special moments' },
-          { id: 'demo-3', filename: 'demo-3.txt', type: 'text', content: 'Together - Our journey' }
-        ]
-        
-        // Add them directly to storage
-        for (const item of demoItems) {
-          const meta = {
-            id: item.id,
-            filename: item.filename,
-            size: item.content.length,
-            type: 'text',
-            mime: 'text/plain',
-            createdAt: Date.now(),
-            favorite: false,
-            tags: ['demo'],
-            eventId: null,
-            comments: [],
-            content: item.content
-          }
-          
-          await metaStore.setItem(`meta:${item.id}`, meta)
-          console.log(`ensureDemoContent: Created text demo item: ${item.filename}`)
-        }
-        
-        // Update index
-        const newIndex = ['demo-1', 'demo-2', 'demo-3']
-        await setMediaIndex(newIndex)
-        console.log('ensureDemoContent: Text demo content created successfully')
-        
-        // Return the demo items
-        return demoItems.map(item => ({
-          id: item.id,
-          filename: item.filename,
-          type: 'text',
-          size: item.content.length,
-          createdAt: Date.now(),
-          favorite: false,
-          tags: ['demo']
-        }))
-        
-      } catch (textError) {
-        console.error('ensureDemoContent: Text approach also failed:', textError)
-        return []
-      }
-    }
-    
-    if (demoFiles.length > 0) {
-      console.log('ensureDemoContent: Adding canvas demo files to storage:', demoFiles.length)
-      
-      try {
-        const added = await addMediaFiles(demoFiles, ['demo'])
-        console.log('ensureDemoContent: Demo content created successfully:', added.length, 'files')
-        
-        // Force a refresh by updating the index
-        const newIndex = await getMediaIndex()
-        console.log('ensureDemoContent: New index length:', newIndex.length)
-        
-        // Return the added files so Gallery can use them immediately
-        return added
-      } catch (error) {
-        console.error('ensureDemoContent: Error adding files to storage:', error)
-        return []
-      }
-    } else {
-      console.error('ensureDemoContent: No demo content was created')
-      return []
-    }
-    
-  } catch (error) {
-    console.error('ensureDemoContent: Error creating demo content:', error)
-    return []
-  }
-}
+// Note: Demo content generation has been removed
+// The website now only shows real media uploaded by users
