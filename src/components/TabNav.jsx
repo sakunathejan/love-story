@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import classNames from 'classnames'
 import { FaBars, FaTimes } from 'react-icons/fa'
 
@@ -50,29 +51,30 @@ export default function TabNav({ current, onChange }) {
               {open ? <FaTimes /> : <FaBars />}
             </button>
           </div>
-          {open && (
-            <div className="absolute left-0 right-0 mt-2 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-lg overflow-hidden z-50">
-              <div className="flex flex-col">
-                {tabs.map((t) => (
-                  <button
-                    key={t.id}
-                    onClick={() => {
-                      onChange(t.id)
-                      setOpen(false)
-                    }}
-                    className={classNames(
-                      'px-4 py-3 text-left text-sm transition',
-                      current === t.id
-                        ? 'bg-brand-600/10 text-brand-700 dark:text-brand-300'
-                        : 'hover:bg-gray-100 dark:hover:bg-gray-800'
-                    )}
-                  >
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+                                  {open && createPortal(
+              <div className="fixed left-4 right-4 xs:left-8 xs:right-8 sm:left-16 sm:right-16 md:left-32 md:right-32 lg:left-64 lg:right-64 top-20 rounded-2xl border border-gray-200/50 dark:border-gray-700/50 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md shadow-2xl overflow-hidden z-[999999] ring-1 ring-black/5 dark:ring-white/5" style={{zIndex: 999999}}>
+                <div className="flex flex-col p-2">
+                  {tabs.map((t) => (
+                    <button
+                      key={t.id}
+                      onClick={() => {
+                        onChange(t.id)
+                        setOpen(false)
+                      }}
+                      className={classNames(
+                        'px-4 py-3 text-left text-sm font-medium rounded-xl transition-all duration-200 mx-1',
+                        current === t.id
+                          ? 'bg-gradient-to-r from-brand-500/20 to-brand-600/20 text-brand-700 dark:text-brand-300 shadow-sm'
+                          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100/80 dark:hover:bg-gray-800/80 hover:scale-[1.02]'
+                      )}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>,
+              document.body
+            )}
         </div>
 
         {/* Desktop/tablet tabs */}

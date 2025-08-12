@@ -26,3 +26,56 @@ html { @apply antialiased; }
 body { @apply overflow-x-hidden bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100; }
 
 .container-page { @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8; }
+
+/* Targeted fix for Favourites and Guestbook pages only */
+.favorites-content .relative,
+.messages-content .relative {
+  position: static !important;
+}
+
+/* Ensure mobile menu appears above content on problematic pages */
+.favorites-content .z-50,
+.messages-content .z-50 {
+  z-index: 9999 !important;
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+}
+
+/* Force all content on problematic pages to stay below mobile menu */
+.favorites-content *,
+.messages-content * {
+  z-index: auto !important;
+  position: static !important;
+  transform: none !important;
+  backdrop-filter: none !important;
+  filter: none !important;
+}
+
+/* Specific fix for MediaCard thumbnails in Favourites page */
+.favorites-content .grid,
+.favorites-content .grid > *,
+.favorites-content .grid > * > *,
+.favorites-content .group,
+.favorites-content .group-hover\:scale-\[1\.02\],
+.favorites-content [class*="hover:scale"],
+.favorites-content [class*="transition-transform"] {
+  z-index: auto !important;
+  position: static !important;
+  transform: none !important;
+  transition: none !important;
+  isolation: auto !important;
+}
+
+/* Ensure MediaCard images and content don't create stacking contexts */
+.favorites-content img,
+.favorites-content video,
+.favorites-content .object-cover,
+.favorites-content .w-full,
+.favorites-content .h-full {
+  z-index: auto !important;
+  position: static !important;
+  transform: none !important;
+}

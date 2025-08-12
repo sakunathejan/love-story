@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
+
 import { FaHeart, FaRegHeart, FaShareAlt, FaTrash, FaCommentAlt, FaEdit, FaReply, FaSmile, FaTimes, FaEllipsisH } from 'react-icons/fa'
 import { getMediaBlob, updateMeta, addComment, addMediaReply, addMediaReaction, getClientId } from '../storage'
 
+
 export default function MediaCard({ meta, onToggleFavorite, onOpen, onDelete, onComment, onUpdate }) {
   const [url, setUrl] = useState('')
+
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
@@ -25,6 +28,7 @@ export default function MediaCard({ meta, onToggleFavorite, onOpen, onDelete, on
   }, [meta])
 
   useEffect(() => {
+
     setLoading(true)
     setError(false)
     
@@ -37,9 +41,11 @@ export default function MediaCard({ meta, onToggleFavorite, onOpen, onDelete, on
       setLoading(false)
     } else {
       // Fallback to getMediaBlob for compatibility
-      ;(async () => {
+    ;(async () => {
+
         try {
-          const blob = await getMediaBlob(meta.id)
+      const blob = await getMediaBlob(meta.id)
+
           console.log('MediaCard: Got blob for', meta.id, blob ? 'success' : 'null')
           
           if (!blob) {
@@ -381,10 +387,12 @@ export default function MediaCard({ meta, onToggleFavorite, onOpen, onDelete, on
   }
 
   return (
+
     <>
       <div className="group rounded-lg overflow-hidden border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 hover:shadow-md transition-shadow">
         <div className="relative">
-          <button className="block w-full aspect-video overflow-hidden" onClick={() => onOpen(meta)}>
+      <button className="block w-full aspect-video overflow-hidden" onClick={() => onOpen(meta)}>
+
             {renderMedia()}
           </button>
           
@@ -669,10 +677,12 @@ export default function MediaCard({ meta, onToggleFavorite, onOpen, onDelete, on
                   : 'Comment'
                 }
               </span>
-            </button>
+      </button>
+
           </div>
         )}
-      </div>
+        </div>
+
 
       {/* Edit Modal */}
       {showEditModal && (
@@ -689,7 +699,8 @@ export default function MediaCard({ meta, onToggleFavorite, onOpen, onDelete, on
                 <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
-              </button>
+          </button>
+
             </div>
 
             <div className="space-y-3 sm:space-y-4">
@@ -725,7 +736,8 @@ export default function MediaCard({ meta, onToggleFavorite, onOpen, onDelete, on
                   className="flex-1 px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50"
                 >
                   Cancel
-                </button>
+          </button>
+
                 <button
                   onClick={handleSave}
                   disabled={saving || !editTitle.trim()}
@@ -739,10 +751,11 @@ export default function MediaCard({ meta, onToggleFavorite, onOpen, onDelete, on
                   ) : (
                     'Save Changes'
                   )}
-                </button>
-              </div>
-            </div>
-          </div>
+          </button>
+        </div>
+      </div>
+    </div>
+
         </div>
       )}
 
@@ -857,3 +870,4 @@ export default function MediaCard({ meta, onToggleFavorite, onOpen, onDelete, on
     </>
   )
 }
+
